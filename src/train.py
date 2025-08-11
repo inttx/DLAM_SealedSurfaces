@@ -13,11 +13,15 @@ def train_loop(train_loader, val_loader, model, loss_fn, optimizer, num_epochs, 
             y = y.to(device)
 
             # Compute prediction and loss
+            print("Forward pass")
             pred = model(X)
+            print("loss computation")
             loss = loss_fn(pred, y.reshape((y.shape[0], pred.shape[-1])))
 
             # Backpropagation
+            print("Backpropagation")
             loss.backward()
+            print("Optimizer step")
             optimizer.step()
             optimizer.zero_grad()
 
