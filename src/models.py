@@ -19,6 +19,7 @@ def custom_resnet18(patch_size, device):
     return model.to(device)
 
 
-def baseline_deeplabv3plus_resnet101(num_classes: int):
+def baseline_deeplabv3plus_resnet101(num_classes: int, device):
     model = torchvision.models.segmentation.deeplabv3_resnet101(weights="DEFAULT")
     model.classifier[4] = torch.nn.Conv2d(256, num_classes, kernel_size=1)
+    return model.to(device=device)
