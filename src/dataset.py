@@ -77,7 +77,7 @@ class PotsdamDataset(Dataset):
         return image_patch, label_patch
 
 
-def get_data_loaders(dataset, dist, batch_size, seed=42):
+def get_data_loaders(dataset, dist, batch_size, num_workers=0, seed=42):
     train_size = int(dist[0] * len(dataset))
     val_size = int(dist[1] * len(dataset))
     test_size = len(dataset) - train_size - val_size
@@ -85,7 +85,7 @@ def get_data_loaders(dataset, dist, batch_size, seed=42):
     train_dataset, val_dataset, test_dataset = random_split(dataset, [train_size, val_size, test_size],
                                                             generator=torch.Generator().manual_seed(seed))
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     return train_loader, val_loader, test_loader
