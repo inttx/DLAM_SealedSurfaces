@@ -1,4 +1,5 @@
 import torch
+from tqdm import tqdm
 
 
 def train_loop(train_loader, val_loader, model, loss_fn, optimizer, num_epochs, device, save_path):
@@ -6,9 +7,8 @@ def train_loop(train_loader, val_loader, model, loss_fn, optimizer, num_epochs, 
     for epoch in range(num_epochs):
         model.train()
         epoch_loss = 0.0
-        print(f"Starting epoch {epoch + 1} / {num_epochs}")
-        for batch, (X, y) in enumerate(train_loader):
-            print(f"Batch {batch + 1} / {num_batches}")
+        train_bar = tqdm(train_loader, desc="Training", leave=False)
+        for X, y in train_bar:
             X = X.to(device)
             y = y.to(device)
 
@@ -21,33 +21,27 @@ def train_loop(train_loader, val_loader, model, loss_fn, optimizer, num_epochs, 
             optimizer.step()
             optimizer.zero_grad()
 
-            epoch_loss += loss.item() / len(X)
+            epoch_loss += loss.item()
+            train_bar.set_postfix(loss=loss.item())
 
         avg_epoch_loss = epoch_loss / num_batches
         print(f"Epoch {epoch + 1} / {num_epochs}: Average loss = {avg_epoch_loss:.4f}")
 
         model.eval()
         val_loss = 0.0
-
+        val_bar = tqdm(val_loader, desc="Validation", leave=False)
         with torch.no_grad():
-            for batch, (X, y) in enumerate(val_loader):
+            for X, y in val_bar:
                 X = X.to(device)
                 y = y.to(device)
-
                 outputs = model(X)
+                loss = loss_fn(outputs, y)
+                val_loss += loss.item()
+                val_bar.set_postfix(loss=loss.item())
 
-                # Initialize batch loss for this iteration
-                batch_loss = 0.0
-                for output, y in zip(output, y):
-                    # Compute loss for each pair
-                    loss = loss_fn(outputs, y)
-                    batch_loss += loss  # Accumulate as tensor
+        avg_val_loss = val_loss / len(val_loader)
+        print(f"Epoch {epoch + 1} average validation loss: {avg_val_loss:.4f}")
 
-                # Average the loss over the batch (keep it as tensor)
-                val_loss += batch_loss.item() / len(X)
-
-        val_loss /= len(val_loader)
-        print(f"Validation Loss: {val_loss:.4f}")
 
     torch.save(model.state_dict(), save_path)
     print(f"Model saved to {save_path}!")
