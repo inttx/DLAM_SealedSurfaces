@@ -56,7 +56,7 @@ class PotsdamDataset(Dataset):
         file_idx = idx // len(self.index_map)
         with rasterio.open(self.image_files[file_idx]) as img:
             image_patch = img.read(window=Window(col, row, self.patch_size, self.patch_size))
-            image_patch = torch.from_numpy(image_patch).float().to(self.device)
+            image_patch = torch.from_numpy(image_patch).float()
 
         with rasterio.open(self.image_labels[file_idx]) as img:
             label_patch = img.read(window=Window(col, row, self.patch_size, self.patch_size))
@@ -70,14 +70,14 @@ class PotsdamDataset(Dataset):
                     class_mask[match] = idx
 
                 # Return tensor
-                return image_patch, torch.from_numpy(class_mask).long().to(self.device)
-            label_patch = torch.from_numpy(label_patch).float().to(self.device)
+                return image_patch, torch.from_numpy(class_mask).long()
+            label_patch = torch.from_numpy(label_patch).float()
         # TODO: Apply Transform
 
         return image_patch, label_patch
 
 
-def get_data_loaders(dataset, dist, batch_size, num_workers=0, seed=42):
+def get_data_loaders(dataset, dist, batch_size, pin_memory=False, num_workers=0, seed=42):
     train_size = int(dist[0] * len(dataset))
     val_size = int(dist[1] * len(dataset))
     test_size = len(dataset) - train_size - val_size
@@ -85,7 +85,10 @@ def get_data_loaders(dataset, dist, batch_size, num_workers=0, seed=42):
     train_dataset, val_dataset, test_dataset = random_split(dataset, [train_size, val_size, test_size],
                                                             generator=torch.Generator().manual_seed(seed))
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
+                              pin_memory=pin_memory)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
+                            pin_memory=pin_memory)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
+                             pin_memory=pin_memory)
     return train_loader, val_loader, test_loader

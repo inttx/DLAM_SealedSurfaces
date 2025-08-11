@@ -10,8 +10,8 @@ def train_loop(train_loader, val_loader, model, loss_fn, optimizer, num_epochs, 
         epoch_loss = 0.0
         train_bar = tqdm(train_loader, desc="Training", leave=False)
         for X, y in train_bar:
-            X = X.to(device)
-            y = y.to(device)
+            X = X.to(device, non_blocking=True)
+            y = y.to(device, non_blocking=True)
 
             # Compute prediction and loss
             pred = model(X)
@@ -38,8 +38,8 @@ def train_loop(train_loader, val_loader, model, loss_fn, optimizer, num_epochs, 
         val_bar = tqdm(val_loader, desc="Validation", leave=False)
         with torch.no_grad():
             for X, y in val_bar:
-                X = X.to(device)
-                y = y.to(device)
+                X = X.to(device, non_blocking=True)
+                y = y.to(device, non_blocking=True)
                 pred = model(X)
                 if type(pred) is collections.OrderedDict:
                     loss1 = loss_fn(pred['out'], y)
