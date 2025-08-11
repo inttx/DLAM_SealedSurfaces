@@ -6,6 +6,7 @@ def train_loop(train_loader, val_loader, model, loss_fn, optimizer, num_epochs, 
     for epoch in range(num_epochs):
         model.train()
         epoch_loss = 0.0
+        print(f"Starting epoch {epoch + 1} / {num_epochs}")
         for batch, (X, y) in enumerate(train_loader):
             print(f"Batch {batch + 1} / {num_batches}")
             X = X.to(device)
