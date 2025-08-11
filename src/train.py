@@ -40,8 +40,13 @@ def train_loop(train_loader, val_loader, model, loss_fn, optimizer, num_epochs, 
             for X, y in val_bar:
                 X = X.to(device)
                 y = y.to(device)
-                outputs = model(X)
-                loss = loss_fn(outputs, y)
+                pred = model(X)
+                if type(pred) is collections.OrderedDict:
+                    loss1 = loss_fn(pred['out'], y)
+                    loss2 = loss_fn(pred['aux'], y)
+                    loss = loss1 + 0.4 * loss2
+                else:
+                    loss = loss_fn(pred, y.reshape((y.shape[0], pred.shape[-1])))
                 val_loss += loss.item()
                 val_bar.set_postfix(loss=loss.item())
 
