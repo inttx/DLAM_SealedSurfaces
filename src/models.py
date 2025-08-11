@@ -1,6 +1,7 @@
 from torch import nn
 from torchvision.models import resnet18, ResNet18_Weights
-
+import torchvision
+import torch
 
 def custom_resnet18(patch_size, device):
     # Load pre-trained ResNet18 model
@@ -16,3 +17,8 @@ def custom_resnet18(patch_size, device):
         params.requires_grad = True
 
     return model.to(device)
+
+
+def baseline_deeplabv3plus_resnet101(num_classes: int):
+    model = torchvision.models.segmentation.deeplabv3_resnet101(weights="DEFAULT")
+    model.classifier[4] = torch.nn.Conv2d(256, num_classes, kernel_size=1)
