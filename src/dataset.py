@@ -48,30 +48,33 @@ class PotsdamDataset(Dataset):
                 for col in range(0, width - self.patch_size + 1, self.stride):
                     self.index_map.append((row, col))
 
+    def _init_files(self):
+        self._images = [rasterio.open(f) for f in self.image_files]
+        self._labels = [rasterio.open(f) for f in self.image_labels]
+
     def __len__(self):
         return len(self.index_map) * len(self.image_files)
 
     def __getitem__(self, idx):
+        if not hasattr(self, "_images"):
+            self._init_files()
         row, col = self.index_map[idx % len(self.index_map)]
         file_idx = idx // len(self.index_map)
-        with rasterio.open(self.image_files[file_idx]) as img:
-            image_patch = img.read(window=Window(col, row, self.patch_size, self.patch_size))
-            image_patch = torch.from_numpy(image_patch).float()
+        image_patch = self._images[file_idx].read(window=Window(col, row, self.patch_size, self.patch_size))
+        image_patch = torch.from_numpy(image_patch).float()
+        label_patch = self._labels[file_idx].read(window=Window(col, row, self.patch_size, self.patch_size))
 
-        with rasterio.open(self.image_labels[file_idx]) as img:
-            label_patch = img.read(window=Window(col, row, self.patch_size, self.patch_size))
+        if self.no_color_labels:
+            label_patch = np.transpose(label_patch, (1, 2, 0))
+            class_mask = np.zeros((self.patch_size, self.patch_size), dtype=np.int64)
 
-            if self.no_color_labels:
-                label_patch = np.transpose(label_patch, (1, 2, 0))
-                class_mask = np.zeros((self.patch_size, self.patch_size), dtype=np.int64)
+            for color, idx in self.COLOR_MAP.items():
+                match = np.all(label_patch == np.array(color), axis=-1)
+                class_mask[match] = idx
 
-                for color, idx in self.COLOR_MAP.items():
-                    match = np.all(label_patch == np.array(color), axis=-1)
-                    class_mask[match] = idx
-
-                # Return tensor
-                return image_patch, torch.from_numpy(class_mask).long()
-            label_patch = torch.from_numpy(label_patch).float()
+            # Return tensor
+            return image_patch, torch.from_numpy(class_mask).long()
+        label_patch = torch.from_numpy(label_patch).float()
         # TODO: Apply Transform
 
         return image_patch, label_patch
