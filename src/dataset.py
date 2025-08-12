@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 import rasterio
 from rasterio.windows import Window
 import numpy as np
-from torch.utils.data import random_split, DataLoader
+from torch.utils.data import random_split, DataLoader, SubsetRandomSampler
 from tqdm import tqdm
 
 
@@ -22,7 +22,8 @@ class PotsdamDataset(Dataset):
         (255, 0, 255): 5,  # Clutter/background
     }
 
-    def __init__(self, image_dir_path, label_dir_path, patch_size, stride, device, no_color_labels=False, transform=None):
+    def __init__(self, image_dir_path, label_dir_path, patch_size, stride, device, no_color_labels=False,
+                 transform=None):
         self.image_dir = image_dir_path
         self.label_dir = label_dir_path
         self.image_files = [path.join(image_dir_path, f) for f in sorted(os.listdir(image_dir_path)) if
@@ -64,8 +65,19 @@ class PotsdamDataset(Dataset):
             self._init_files()
         row, col = self.index_map[idx % len(self.index_map)]
         file_idx = idx // len(self.index_map)
+
+        # Read image
         image_patch = self._images[file_idx].read(window=Window(col, row, self.patch_size, self.patch_size))
         image_patch = torch.from_numpy(image_patch).float()
+
+
+        # Normalize for SegFormer (same as ImageNet)
+        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+        image_patch = image_patch / 255.0
+        image_patch = (image_patch - mean) / std
+
+        # Read label
         label_patch = self._labels[file_idx].read(window=Window(col, row, self.patch_size, self.patch_size))
 
         if self.no_color_labels:
@@ -76,11 +88,9 @@ class PotsdamDataset(Dataset):
                 match = np.all(label_patch == np.array(color), axis=-1)
                 class_mask[match] = idx
 
-            # Return tensor
             return image_patch, torch.from_numpy(class_mask).long()
-        label_patch = torch.from_numpy(label_patch).float()
-        # TODO: Apply Transform
 
+        label_patch = torch.from_numpy(label_patch).float()
         return image_patch, label_patch
 
 
@@ -89,9 +99,15 @@ def get_data_loaders(dataset, dist, batch_size, pin_memory=False, num_workers=0,
     val_size = int(dist[1] * len(dataset))
     test_size = len(dataset) - train_size - val_size
 
+    # TODO: remove subset_indices after testing
+    subset_indices = list(range(32))  # first 100 samples
+
+    sampler = SubsetRandomSampler(subset_indices)
+
     train_dataset, val_dataset, test_dataset = random_split(dataset, [train_size, val_size, test_size],
                                                             generator=torch.Generator().manual_seed(seed))
 
+    # TODO: put shuffle=True after testing
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
                               pin_memory=pin_memory)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
