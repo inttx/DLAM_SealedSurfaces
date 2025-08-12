@@ -8,7 +8,7 @@ import rasterio
 from rasterio.windows import Window
 import numpy as np
 from torch.utils.data import random_split, DataLoader
-
+from tqdm import tqdm
 
 
 # Number of Patches = (img_dim - patch_size) // Stride + 1
@@ -44,13 +44,17 @@ class PotsdamDataset(Dataset):
     def _build_index(self):
         with rasterio.open(self.image_files[0]) as img:
             height, width = img.height, img.width
-            for row in range(0, height - self.patch_size + 1, self.stride):
+            for row in tqdm(range(0, height - self.patch_size + 1, self.stride), desc="Building index (rows)"):
                 for col in range(0, width - self.patch_size + 1, self.stride):
                     self.index_map.append((row, col))
 
     def _init_files(self):
-        self._images = [rasterio.open(f) for f in self.image_files]
-        self._labels = [rasterio.open(f) for f in self.image_labels]
+        self._images = []
+        self._labels = []
+        for f in tqdm(self.image_files, desc="Opening image files"):
+            self._images.append(rasterio.open(f))
+        for f in tqdm(self.image_labels, desc="Opening label files"):
+            self._labels.append(rasterio.open(f))
 
     def __len__(self):
         return len(self.index_map) * len(self.image_files)
