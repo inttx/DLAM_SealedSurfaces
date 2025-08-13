@@ -14,10 +14,6 @@ from typing import List
 
 # Number of Patches = (img_dim - patch_size) // Stride + 1
 class PotsdamDataset(Dataset):
-    """
-    Dataset for ISPRS Potsdam semantic segmentation.
-    """
-
     COLOR_MAP = {
         (255, 255, 255): 0,  # Impervious surfaces
         (0, 0, 255): 1,  # Building
@@ -30,9 +26,6 @@ class PotsdamDataset(Dataset):
     def __init__(self, image_dir_path, label_dir_path, patch_size: int, stride: int, device: str, transform=None):
         """
         Dataset for ISPRS Potsdam semantic segmentation.
-        Returns:
-        image_patch: Float tensor of shape (3, patch_size, patch_size), normalized to ImageNet stats
-        label_patch: Long tensor of shape (patch_size, patch_size) with class indices (0..5)
 
         :param image_dir_path: Path to the directory containing image files.
         :param label_dir_path: Path to the directory containing label files.
