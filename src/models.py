@@ -5,14 +5,14 @@ import torch
 from transformers import SegformerForSemanticSegmentation, SegformerFeatureExtractor, TrainingArguments, Trainer
 
 
-def custom_resnet18(patch_size, device):
-    # Load pre-trained ResNet18 model
+def custom_resnet18(patch_size, num_classes, device):
+    # Load pre-trained ResNet18
     model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
 
-    # Configure custom layer
-    model.fc = nn.Linear(512 * 1, patch_size * patch_size * 3)
+    # Change output layer to predict per-pixel class logits
+    model.fc = nn.Linear(512, patch_size * patch_size * num_classes)
 
-    # Freeze model parameters except for custom layer
+    # Freeze all layers except final FC
     for params in model.parameters():
         params.requires_grad = False
     for params in model.fc.parameters():
@@ -21,10 +21,31 @@ def custom_resnet18(patch_size, device):
     return model.to(device)
 
 
-def baseline_deeplabv3plus_resnet101(num_classes: int, device):
+def get_trained_custom_resnet18(model_path: str, patch_size: int, num_classes: int, device):
+    # Load pre-trained ResNet18
+    model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+
+    # Change output layer to predict per-pixel class logits
+    model.fc = nn.Linear(512, patch_size * patch_size * num_classes)
+
+    # Load trained weights
+    model.load_state_dict(torch.load(model_path, map_location=device))
+
+    return model.to(device)
+
+
+def baseline_deeplabv3_resnet101(num_classes: int, device):
     model = torchvision.models.segmentation.deeplabv3_resnet101(weights="DEFAULT")
     model.classifier[4] = torch.nn.Conv2d(256, num_classes, kernel_size=1)
     return model.to(device=device)
+
+
+def get_trained_deeplabv3_resnet101(model_path: str, num_classes: int, device):
+    model = torchvision.models.segmentation.deeplabv3_resnet101(weights="DEFAULT")
+    model.classifier[4] = torch.nn.Conv2d(256, num_classes, kernel_size=1)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+
+    return model.to(device)
 
 
 def seg_former(num_classes: int, device):
@@ -33,4 +54,15 @@ def seg_former(num_classes: int, device):
         num_labels=num_classes,
         ignore_mismatched_sizes=True
     )
+    return model.to(device)
+
+
+def get_trained_segformer_model(model_path: str, num_classes: int, device):
+    model = SegformerForSemanticSegmentation.from_pretrained(
+        "nvidia/segformer-b0-finetuned-ade-512-512",
+        num_labels=num_classes,
+        ignore_mismatched_sizes=True
+    )
+    model.load_state_dict(torch.load(model_path, map_location=device))
+
     return model.to(device)

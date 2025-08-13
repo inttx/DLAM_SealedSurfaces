@@ -6,7 +6,7 @@ import numpy as np
 
 
 def train_loop(train_loader, val_loader, model, loss_fn, optimizer, num_epochs, device, save_path, model_type: str,
-               plot_path, patience=5):
+               plot_path, patch_size, batch_size, num_classes, patience=5):
     num_batches = len(train_loader)
 
     train_losses = []
@@ -40,7 +40,8 @@ def train_loop(train_loader, val_loader, model, loss_fn, optimizer, num_epochs, 
                                                align_corners=False)
                 loss = loss_fn(pred_upsampled, y)
             else:
-                loss = loss_fn(pred, y.reshape((y.shape[0], pred.shape[-1])))
+                pred = pred.view(batch_size, num_classes, patch_size, patch_size)
+                loss = loss_fn(pred, y)
 
             # Backward pass
             loss.backward()
@@ -76,7 +77,8 @@ def train_loop(train_loader, val_loader, model, loss_fn, optimizer, num_epochs, 
                                                    align_corners=False)
                     loss = loss_fn(pred_upsampled, y)
                 else:
-                    loss = loss_fn(pred, y.reshape((y.shape[0], pred.shape[-1])))
+                    pred = pred.view(batch_size, num_classes, patch_size, patch_size)
+                    loss = loss_fn(pred, y)
 
                 val_loss += loss.item()
                 val_bar.set_postfix(loss=loss.item())
