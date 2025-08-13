@@ -9,16 +9,14 @@ from rasterio.windows import Window
 import numpy as np
 from torch.utils.data import random_split, DataLoader, SubsetRandomSampler
 from tqdm import tqdm
+from typing import List
 
 
 # Number of Patches = (img_dim - patch_size) // Stride + 1
 class PotsdamDataset(Dataset):
     """
-        Dataset for ISPRS Potsdam semantic segmentation.
-        Returns:
-            image_patch: Float tensor of shape (3, patch_size, patch_size), normalized to ImageNet stats
-            label_patch: Long tensor of shape (patch_size, patch_size) with class indices (0..5)
-        """
+    Dataset for ISPRS Potsdam semantic segmentation.
+    """
 
     COLOR_MAP = {
         (255, 255, 255): 0,  # Impervious surfaces
@@ -29,7 +27,20 @@ class PotsdamDataset(Dataset):
         (255, 0, 255): 5,  # Clutter/background
     }
 
-    def __init__(self, image_dir_path, label_dir_path, patch_size, stride, device, transform=None):
+    def __init__(self, image_dir_path, label_dir_path, patch_size: int, stride: int, device: str, transform=None):
+        """
+        Dataset for ISPRS Potsdam semantic segmentation.
+        Returns:
+        image_patch: Float tensor of shape (3, patch_size, patch_size), normalized to ImageNet stats
+        label_patch: Long tensor of shape (patch_size, patch_size) with class indices (0..5)
+
+        :param image_dir_path: Path to the directory containing image files.
+        :param label_dir_path: Path to the directory containing label files.
+        :param patch_size: Size of the patches to extract from the images and labels.
+        :param stride: Stride for extracting patches from the images and labels.
+        :param device: Device to load the data onto (e.g., 'cuda' or 'cpu').
+        :param transform: Optional transform to apply to the image and label patches.
+        """
         self.image_dir = image_dir_path
         self.label_dir = label_dir_path
         self.image_files = sorted(
@@ -82,7 +93,15 @@ class PotsdamDataset(Dataset):
             mask[np.all(rgb_img == np.array(color), axis=-1)] = cls_idx
         return mask
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> (torch.Tensor, torch.Tensor):
+        """
+        Get a patch of image and label at the specified index.
+
+        :param idx: index of the patch to retrieve
+        :return:
+        image_patch: Float tensor of shape (3, patch_size, patch_size), normalized to ImageNet stats
+        label_patch: Long tensor of shape (patch_size, patch_size) with class indices (0..5)
+        """
         if self._images is None:
             self._init_files()
 
@@ -107,7 +126,19 @@ class PotsdamDataset(Dataset):
         return image_patch, label_patch
 
 
-def get_data_loaders(dataset, dist, batch_size, pin_memory=False, num_workers=0, seed=42):
+def get_data_loaders(dataset: PotsdamDataset, dist: List[int], batch_size: int, pin_memory: bool = False,
+                     num_workers: int = 0, seed: int = 42) -> (DataLoader, DataLoader, DataLoader):
+    """
+    Get train, validation, and test data loaders for the Potsdam dataset.
+
+    :param dataset: dataset to split into train, validation, and test sets
+    :param dist: distribution of samples across train, validation, and test sets
+    :param batch_size: batch size for the data loaders
+    :param pin_memory: if True, data loader will use pinned memory for faster data transfer to GPU
+    :param num_workers: number of subprocesses to use for data loading
+    :param seed: random seed for reproducibility
+    :return: train_loader, val_loader, test_loader
+    """
     train_size = int(dist[0] * len(dataset))
     val_size = int(dist[1] * len(dataset))
     test_size = len(dataset) - train_size - val_size

@@ -3,10 +3,31 @@ from tqdm import tqdm
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import numpy as np
+from torch.utils.data import DataLoader
+from torch.optim import Optimizer
+from torch.nn import Module
 
 
-def train_loop(train_loader, val_loader, model, loss_fn, optimizer, num_epochs, device, save_path, model_type: str,
-               plot_path, patch_size, batch_size, num_classes, patience=5):
+def train_loop(train_loader: DataLoader, val_loader: DataLoader, model: Module, loss_fn: Module,
+               optimizer: Optimizer, num_epochs: int, device: str, save_path: str, model_type: str,
+               plot_path: str, patch_size: int, num_classes: int, patience: int = 5):
+    """
+    Train the segmentation model with early stopping and loss plotting.
+
+    :param train_loader: training data loader
+    :param val_loader: validation data loader
+    :param model: model to train
+    :param loss_fn: criterion for loss calculation
+    :param optimizer: optimizer for model parameters
+    :param num_epochs: number of epochs to train
+    :param device: device to run the training on (e.g., 'cuda' or 'cpu')
+    :param save_path: path to save the best model
+    :param model_type: the model type, e.g., 'SegFormer', 'DeepLabV3', or 'ResNet18'
+    :param plot_path: path to save the loss plot
+    :param patch_size: size of the patches used in the model
+    :param num_classes: number of classes in the segmentation task
+    :param patience: number of epochs with no improvement after which training will be stopped
+    """
     num_batches = len(train_loader)
 
     train_losses = []

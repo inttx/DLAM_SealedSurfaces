@@ -1,11 +1,11 @@
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import confusion_matrix
 import numpy as np
 from tqdm import tqdm
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
+from torch.nn import Module
 
 CLASS_NAMES = ['Impervious surfaces',
                'Building',
@@ -15,8 +15,8 @@ CLASS_NAMES = ['Impervious surfaces',
                'Clutter/background']
 
 
-def evaluate_segmentation(model: torch.Module, data_loader: DataLoader, device: str, model_type: str, num_classes: int,
-                          eval_path: str):
+def evaluate_segmentation(model: Module, data_loader: DataLoader, device: str, model_type: str, num_classes: int,
+                          patch_size: int, eval_path: str):
     """
     Evaluate the segmentation model on the provided data loader.
 
@@ -25,6 +25,7 @@ def evaluate_segmentation(model: torch.Module, data_loader: DataLoader, device: 
     :param device: compute device (e.g., 'cuda' or 'cpu')
     :param model_type: name of the model type 'SegFormer', 'DeepLabV3' or 'ResNet18'
     :param num_classes: number of classes in the segmentation task
+    :param patch_size: patch size used in the model
     :param eval_path: path to save evaluation results (e.g., confusion matrix plot)
     """
 
@@ -49,9 +50,11 @@ def evaluate_segmentation(model: torch.Module, data_loader: DataLoader, device: 
                 logits = model(X)
                 if model_type == 'DeepLabV3':
                     logits = logits['out']  # take main output
-
-            # Upsample logits to match label size
-            logits = F.interpolate(logits, size=(y.shape[1], y.shape[2]), mode='bilinear', align_corners=False)
+                elif model_type == 'SefFormer':
+                    # Upsample logits to match label size
+                    logits = F.interpolate(logits, size=(y.shape[1], y.shape[2]), mode='bilinear', align_corners=False)
+                else:
+                    logits = logits.view(X.size(0), num_classes, patch_size, patch_size)
 
             # Predicted class per pixel
             preds = torch.argmax(logits, dim=1)  # [B, H, W]
