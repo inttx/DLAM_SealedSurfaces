@@ -4,7 +4,7 @@ from torch.optim import AdamW
 
 from settings import *
 from dataset import PotsdamDataset
-from model import custom_resnet18
+from models import custom_resnet18
 from train import train_loop
 
 # Hyperparameters
@@ -27,5 +27,5 @@ dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
 loss_fn = nn.MSELoss()
 optimizer = AdamW(model.parameters(), lr=lr)
 
-train_loop(dataloader=dataloader, model=model, loss_fn=loss_fn, optimizer=optimizer, num_epochs=num_epochs, device=DEVICE)
+train_loop(train_loader=dataloader, model=model, loss_fn=loss_fn, optimizer=optimizer, num_epochs=num_epochs, device=DEVICE)
 

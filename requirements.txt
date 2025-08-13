@@ -1,3 +1,6 @@
 rasterio
 torch
 torchvision
+tqdm
+transformers
+matplotlib

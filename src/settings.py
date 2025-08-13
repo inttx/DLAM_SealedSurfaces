@@ -2,6 +2,9 @@ import warnings
 
 import torch.cuda
 from rasterio.errors import NotGeoreferencedWarning
+import torch.multiprocessing as mp
+
+mp.set_start_method('spawn', force=True)
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
