@@ -40,7 +40,7 @@ def train_loop(train_loader, val_loader, model, loss_fn, optimizer, num_epochs, 
                                                align_corners=False)
                 loss = loss_fn(pred_upsampled, y)
             else:
-                pred = pred.view(batch_size, num_classes, patch_size, patch_size)
+                pred = pred.view(X.size(0), num_classes, patch_size, patch_size)
                 loss = loss_fn(pred, y)
 
             # Backward pass
@@ -77,7 +77,7 @@ def train_loop(train_loader, val_loader, model, loss_fn, optimizer, num_epochs, 
                                                    align_corners=False)
                     loss = loss_fn(pred_upsampled, y)
                 else:
-                    pred = pred.view(batch_size, num_classes, patch_size, patch_size)
+                    pred = pred.view(X.size(0), num_classes, patch_size, patch_size)
                     loss = loss_fn(pred, y)
 
                 val_loss += loss.item()

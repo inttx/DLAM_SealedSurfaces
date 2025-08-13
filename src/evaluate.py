@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
+from torch.utils.data import DataLoader
 
 CLASS_NAMES = ['Impervious surfaces',
                'Building',
@@ -14,7 +15,19 @@ CLASS_NAMES = ['Impervious surfaces',
                'Clutter/background']
 
 
-def evaluate_segmentation(model, data_loader, device, model_type, num_classes, eval_path):
+def evaluate_segmentation(model: torch.Module, data_loader: DataLoader, device: str, model_type: str, num_classes: int,
+                          eval_path: str):
+    """
+    Evaluate the segmentation model on the provided data loader.
+
+    :param model: torch model
+    :param data_loader: data loader for evaluation
+    :param device: compute device (e.g., 'cuda' or 'cpu')
+    :param model_type: name of the model type 'SegFormer', 'DeepLabV3' or 'ResNet18'
+    :param num_classes: number of classes in the segmentation task
+    :param eval_path: path to save evaluation results (e.g., confusion matrix plot)
+    """
+
     model.eval()
     total_correct = 0
     total_pixels = 0
