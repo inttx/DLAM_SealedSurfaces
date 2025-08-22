@@ -9,19 +9,37 @@ from rasterio.windows import Window
 import numpy as np
 from torch.utils.data import random_split, DataLoader, SubsetRandomSampler
 from tqdm import tqdm
-from typing import List
+from typing import List, Tuple
 
 
 # Number of Patches = (img_dim - patch_size) // Stride + 1
 class PotsdamDataset(Dataset):
     COLOR_MAP = {
+        # Impervious surfaces: 0
         (255, 255, 255): 0,  # Impervious surfaces
-        (0, 0, 255): 1,  # Building
-        (0, 255, 255): 2,  # Low vegetation
-        (0, 255, 0): 3,  # Tree
-        (255, 0, 0): 4,  # Car
-        (255, 0, 255): 5,  # Clutter/background
+        (0, 0, 255): 0,  # Building
+        (255, 0, 0): 0,  # Car
+        # Pervious surfaces: 1
+        (0, 255, 255): 1,  # Low vegetation
+        (0, 255, 0): 1,  # Tree
+        # Others: 2
+        (255, 0, 255): 2,  # Clutter/background
     }
+
+    CLASS_NAMES = [
+        'Impervious surfaces',
+        'Pervious surfaces',
+        'Others'
+    ]
+
+    @staticmethod
+    def get_num_classes() -> int:
+        """
+        Return the number of distinct segmentation classes in the labels
+        :return: number of segmentation classes
+        """
+        assert len(PotsdamDataset.CLASS_NAMES) == len(set(PotsdamDataset.COLOR_MAP.values())), f"COLOR_MAP and CLASS_NAMES differ in the number of classes"
+        return len(PotsdamDataset.CLASS_NAMES)
 
     def __init__(self, image_dir_path, label_dir_path, patch_size: int, stride: int, device: str, transform=None):
         """
@@ -86,7 +104,7 @@ class PotsdamDataset(Dataset):
             mask[np.all(rgb_img == np.array(color), axis=-1)] = cls_idx
         return mask
 
-    def __getitem__(self, idx: int) -> (torch.Tensor, torch.Tensor):
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Get a patch of image and label at the specified index.
 
@@ -119,8 +137,8 @@ class PotsdamDataset(Dataset):
         return image_patch, label_patch
 
 
-def get_data_loaders(dataset: PotsdamDataset, dist: List[int], batch_size: int, pin_memory: bool = False,
-                     num_workers: int = 0, seed: int = 42) -> (DataLoader, DataLoader, DataLoader):
+def get_data_loaders(dataset: PotsdamDataset, dist: List[float], batch_size: int, pin_memory: bool = False,
+                     num_workers: int = 0, seed: int = 42) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
     Get train, validation, and test data loaders for the Potsdam dataset.
 
@@ -135,11 +153,6 @@ def get_data_loaders(dataset: PotsdamDataset, dist: List[int], batch_size: int, 
     train_size = int(dist[0] * len(dataset))
     val_size = int(dist[1] * len(dataset))
     test_size = len(dataset) - train_size - val_size
-
-    # TODO: remove subset_indices after testing
-    subset_indices = list(range(32))  # first 100 samples
-
-    sampler = SubsetRandomSampler(subset_indices)
 
     train_dataset, val_dataset, test_dataset = random_split(dataset, [train_size, val_size, test_size],
                                                             generator=torch.Generator().manual_seed(seed))
