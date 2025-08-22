@@ -32,14 +32,14 @@ class PotsdamDataset(Dataset):
         'Others'
     ]
 
-    @staticmethod
-    def get_num_classes() -> int:
+    @classmethod
+    def get_num_classes(cls) -> int:
         """
         Return the number of distinct segmentation classes in the labels
         :return: number of segmentation classes
         """
-        assert len(PotsdamDataset.CLASS_NAMES) == len(set(PotsdamDataset.COLOR_MAP.values())), f"COLOR_MAP and CLASS_NAMES differ in the number of classes"
-        return len(PotsdamDataset.CLASS_NAMES)
+        assert len(cls.CLASS_NAMES) == len(set(cls.COLOR_MAP.values())), f"COLOR_MAP and CLASS_NAMES differ in the number of classes"
+        return len(cls.CLASS_NAMES)
 
     def __init__(self, image_dir_path, label_dir_path, patch_size: int, stride: int, device: str, transform=None):
         """
