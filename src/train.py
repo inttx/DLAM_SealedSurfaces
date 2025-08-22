@@ -127,7 +127,7 @@ def train_loop(train_loader: DataLoader, val_loader: DataLoader, model: Module, 
     plt.plot(range(1, len(train_losses) + 1), train_losses, label='Train Loss')
     plt.plot(range(1, len(val_losses) + 1), val_losses, label='Validation Loss')
     plt.xlabel('Epoch')
-    plt.ylabel('Loss')
+    plt.ylabel(f'Loss ({loss_fn})')
     plt.title('Training and Validation Loss over Epochs')
     plt.legend()
     plt.grid(True)

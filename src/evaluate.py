@@ -7,13 +7,6 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from torch.nn import Module
 
-CLASS_NAMES = ['Impervious surfaces',
-               'Building',
-               'Low vegetation',
-               'Tree',
-               'Car',
-               'Clutter/background']
-
 
 def fast_confusion_matrix(y_true, y_pred, num_classes):
     """
@@ -31,11 +24,12 @@ def fast_confusion_matrix(y_true, y_pred, num_classes):
     return cm
 
 
-def evaluate_segmentation(model, data_loader, device, model_type, num_classes,
+def evaluate_segmentation(model, data_loader, device, model_type, class_names,
                           patch_size, eval_path):
     model.eval()
     total_correct = 0
     total_pixels = 0
+    num_classes = len(class_names)
 
     # Running totals
     iou_sum = np.zeros(num_classes, dtype=np.float64)
@@ -97,7 +91,7 @@ def evaluate_segmentation(model, data_loader, device, model_type, num_classes,
 
     disp = ConfusionMatrixDisplay(
         confusion_matrix=cm_normalized[:plot_classes, :plot_classes],
-        display_labels=CLASS_NAMES[:plot_classes]
+        display_labels=class_names[:plot_classes]
     )
     fig, ax = plt.subplots(figsize=(8, 8))
     disp.plot(ax=ax, cmap='viridis', colorbar=True)
