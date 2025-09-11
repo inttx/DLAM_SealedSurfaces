@@ -18,12 +18,12 @@ class PotsdamDataset(Dataset):
         # Impervious surfaces: 0
         (255, 255, 255): 0,  # Impervious surfaces
         (0, 0, 255): 0,  # Building
-        (255, 0, 0): 0,  # Car
+        (255, 255, 0): 0,  # Car
         # Pervious surfaces: 1
         (0, 255, 255): 1,  # Low vegetation
         (0, 255, 0): 1,  # Tree
         # Others: 2
-        (255, 0, 255): 2,  # Clutter/background
+        (255, 0, 0): 2,  # Clutter/background
     }
 
     CLASS_NAMES = [
