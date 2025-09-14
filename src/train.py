@@ -8,6 +8,12 @@ from torch.optim import Optimizer
 from torch.nn import Module
 
 
+def set_requires_grad(module, requires_grad: bool):
+    """Freeze or unfreeze an entire module."""
+    for param in module.parameters():
+        param.requires_grad = requires_grad
+
+
 def train_loop(train_loader: DataLoader, val_loader: DataLoader, model: Module, loss_fn: Module,
                optimizer: Optimizer, num_epochs: int, device: str, save_path: str, model_type: str,
                plot_path: str, patch_size: int, num_classes: int, patience: int = 5):
@@ -128,7 +134,7 @@ def train_loop(train_loader: DataLoader, val_loader: DataLoader, model: Module, 
     plt.plot(range(1, len(val_losses) + 1), val_losses, label='Validation Loss')
     plt.xlabel('Epoch')
     plt.ylabel(f'Loss ({loss_fn})')
-    plt.title('Training and Validation Loss over Epochs')
+    plt.title(model_type)
     plt.legend()
     plt.grid(True)
     plt.savefig(plot_path)
