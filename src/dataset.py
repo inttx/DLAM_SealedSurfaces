@@ -17,14 +17,14 @@ from albumentations.pytorch import ToTensorV2
 
 def get_train_transform(patch_size: int):
     return A.Compose([
-        A.RandomRotate90(p=0.5),
-        A.HorizontalFlip(p=0.5),
+        A.RandomRotate90(p=0.3),
+        A.HorizontalFlip(p=0.3),
         A.VerticalFlip(p=0.5),
-        A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.2, rotate_limit=45, p=0.5),
-        A.RandomBrightnessContrast(p=0.5),
-        A.HueSaturationValue(p=0.5),
+        A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.15, rotate_limit=45, p=0.3),
+        A.RandomBrightnessContrast(p=0.3),
+        A.HueSaturationValue(p=0.3),
         A.GaussianBlur(p=0.3),
-        A.GaussNoise(var_limit=(10.0, 50.0), p=0.3),
+        A.GaussNoise(std_range=(0.05, 0.15), p=0.3),
         A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
         ToTensorV2(),
     ])
@@ -54,7 +54,7 @@ class PotsdamDataset(Dataset):
         (255, 255, 255): 0,  # Impervious surfaces
         (0, 0, 255): 0,  # Building
         (255, 255, 0): 0,  # Car
-        # Previous surfaces: 1
+        # Pervious surfaces: 1
         (0, 255, 255): 1,  # Low vegetation
         (0, 255, 0): 1,  # Tree
         # Others: 2
@@ -66,7 +66,7 @@ class PotsdamDataset(Dataset):
     ]
 
     CLASS_NAMES_COMBINED = [
-        'Impervious surfaces', 'Previous surfaces', 'Others'
+        'Impervious surfaces', 'Pervious surfaces', 'Others'
     ]
 
     @classmethod
@@ -175,7 +175,7 @@ class PotsdamDataset(Dataset):
         # Apply Albumentations transform (including normalization + ToTensorV2)
         if self.transform:
             augmented = self.transform(image=image_patch, mask=label_patch)
-            image_patch, label_patch = augmented['image'], augmented['mask']
+            image_patch, label_patch = augmented['image'], augmented['mask'].long()
         else:
             # Fallback to tensor without augmentation
             image_patch = torch.from_numpy(image_patch).permute(2, 0, 1).float() / 255.0
