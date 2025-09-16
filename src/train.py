@@ -6,6 +6,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from torch.optim import Optimizer
 from torch.nn import Module
+import gc
 
 
 def set_requires_grad(module, requires_grad: bool):
@@ -77,6 +78,9 @@ def train_loop(train_loader: DataLoader, val_loader: DataLoader, model: Module, 
             epoch_loss += loss.item()
             train_bar.set_postfix(loss=loss.item())
 
+        gc.collect()
+        torch.cuda.empty_cache()
+        
         avg_epoch_loss = epoch_loss / num_batches
         train_losses.append(avg_epoch_loss)
         print(f"Epoch {epoch + 1} / {num_epochs}: Train Loss = {avg_epoch_loss:.4f}")
