@@ -1,5 +1,10 @@
+import abc
+from abc import ABCMeta
+
 import os
 import os.path as path
+
+from types import MappingProxyType
 
 import torch
 from torch.utils.data import Dataset, Subset
@@ -7,85 +12,87 @@ from torch.utils.data import Dataset, Subset
 import rasterio
 from rasterio.windows import Window
 import numpy as np
-from torch.utils.data import random_split, DataLoader, SubsetRandomSampler
+from torch.utils.data import DataLoader
 from tqdm import tqdm
-from typing import List, Tuple
 
 import albumentations as A
-from albumentations.pytorch import ToTensorV2
+from albumentations import ToTensorV2
 
 
-def get_train_transform(patch_size: int):
-    return A.Compose([
-        A.RandomRotate90(p=0.3),
-        A.HorizontalFlip(p=0.3),
-        A.VerticalFlip(p=0.5),
-        A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.15, rotate_limit=45, p=0.3),
-        A.RandomBrightnessContrast(p=0.3),
-        A.HueSaturationValue(p=0.3),
-        A.GaussianBlur(p=0.3),
-        A.GaussNoise(std_range=(0.05, 0.15), p=0.3),
-        A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        ToTensorV2(),
-    ])
+class CustomDataset(Dataset, metaclass=ABCMeta):
+    @staticmethod
+    @abc.abstractmethod
+    def color_map_single() -> MappingProxyType[tuple[int, int, int], int]:
+        """
+        Color map for single-class segmentation (all classes separate).
 
+        Returns a mapping from RGB tuples to class indices.
+        To be implemented in subclasses for specific datasets.
+        """
+        ...
 
-def get_val_transform():
-    return A.Compose([
-        A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        ToTensorV2(),
-    ])
+    @staticmethod
+    @abc.abstractmethod
+    def color_map_combined() -> MappingProxyType[tuple[int, int, int], int]:
+        """
+        Color map for combined-class segmentation (impervious/pervious/others).
 
+        Returns a mapping from RGB tuples to class indices (0/1/2).
+        To be implemented in subclasses for specific datasets.
+        """
+        ...
 
-# Number of Patches = (img_dim - patch_size) // Stride + 1
-class PotsdamDataset(Dataset):
-    # Single-class version (all classes separate)
-    COLOR_MAP_SINGLE = {
-        (255, 255, 255): 0,  # Impervious surfaces
-        (0, 0, 255): 1,  # Building
-        (255, 255, 0): 2,  # Car
-        (0, 255, 255): 3,  # Low vegetation
-        (0, 255, 0): 4,  # Tree
-        (255, 0, 0): 5,  # Clutter/background
-    }
+    @staticmethod
+    @abc.abstractmethod
+    def class_names_single() -> tuple[str, ...]:
+        """
+        Class names for single-class segmentation (all classes separate).
 
-    COLOR_MAP_COMBINED = {
-        # Impervious surfaces: 0
-        (255, 255, 255): 0,  # Impervious surfaces
-        (0, 0, 255): 0,  # Building
-        (255, 255, 0): 0,  # Car
-        # Pervious surfaces: 1
-        (0, 255, 255): 1,  # Low vegetation
-        (0, 255, 0): 1,  # Tree
-        # Others: 2
-        (255, 0, 0): 2,  # Clutter/background
-    }
+        To be implemented in subclasses for specific datasets.
+        """
+        ...
 
-    CLASS_NAMES_SINGLE = [
-        'Impervious surfaces', 'Building', 'Car', 'Low vegetation', 'Tree', 'Clutter/background'
-    ]
+    @staticmethod
+    def class_names_combined() -> tuple[str, ...]:
+        """
+        Class names for combined-class segmentation.
 
-    CLASS_NAMES_COMBINED = [
-        'Impervious surfaces', 'Pervious surfaces', 'Others'
-    ]
+        All datasets use the same combined classes.
+        The original single classes are combined to these three classes.
+        """
+        return 'Impervious surfaces', 'Pervious surfaces', 'Others'
 
     @classmethod
     def get_num_classes(cls, mode='combined') -> int:
-        if mode == 'single':
-            return len(cls.CLASS_NAMES_SINGLE)
-        else:
-            return len(cls.CLASS_NAMES_COMBINED)
-
-    def __init__(self, image_dir_path, label_dir_path, patch_size: int, stride: int, device: str,
-                 mode='combined'):
         """
-        Dataset for ISPRS Potsdam semantic segmentation.
+        Get number of classes based on the mode.
+
+        :param mode: 'single' for all classes separate, 'combined' for grouped classes
+        :return: number of classes
+        """
+        if mode == 'single':
+            return len(cls.class_names_single())
+        if mode == 'combined':
+            return len(cls.class_names_combined())
+
+        raise ValueError(f"Invalid mode: {mode}. Choose 'single' or 'combined'.")
+
+    def __init__(
+            self,
+            image_dir_path: str, label_dir_path: str,
+            patch_size: int, stride: int,
+            device: str,
+            mode: str = "combined"
+    ):
+        """
+        Setup custom dataset for image semantic segmentation.
 
         :param image_dir_path: Path to the directory containing image files.
         :param label_dir_path: Path to the directory containing label files.
         :param patch_size: Size of the patches to extract from the images and labels.
         :param stride: Stride for extracting patches from the images and labels.
         :param device: Device to load the data onto (e.g., 'cuda' or 'cpu').
+        :param mode: 'single' for all classes separate, 'combined' for dividing classes into impervious/pervious/others
         """
         self.image_dir = image_dir_path
         self.label_dir = label_dir_path
@@ -101,7 +108,7 @@ class PotsdamDataset(Dataset):
         self.stride = stride
         self.mode = mode
         self.is_training = True
-        self.transform = get_train_transform(self.patch_size)
+        self.transform = self._get_train_transform()
 
         # Precompute all patch positions
         self.index_map = []
@@ -112,9 +119,9 @@ class PotsdamDataset(Dataset):
         self._labels = None
 
         if self.mode == 'single':
-            self._colormap = self.COLOR_MAP_SINGLE
+            self._colormap = self.color_map_single()
         else:
-            self._colormap = self.COLOR_MAP_COMBINED
+            self._colormap = self.color_map_combined()
 
     def _build_index(self):
         with rasterio.open(self.image_files[0]) as img:
@@ -128,19 +135,19 @@ class PotsdamDataset(Dataset):
         self._images = [rasterio.open(f) for f in self.image_files]
         self._labels = [rasterio.open(f) for f in self.label_files]
 
-    def set_is_training(self, is_training):
+    def set_is_training(self, is_training: bool):
         self.is_training = is_training
         if self.is_training:
-            self.transform = get_train_transform(self.patch_size)
+            self.transform = self._get_train_transform()
         else:
-            self.transform = get_val_transform()
+            self.transform = self._get_val_transform()
 
     def __len__(self):
         return len(self.index_map) * len(self.image_files)
 
     def _rgb_to_class_mask(self, rgb_img):
         """
-        Convert RGB mask to class index mask using COLOR_MAP.
+        Convert RGB mask to class index mask using the color map.
         rgb_img: (H, W, 3) ndarray
         returns: (H, W) ndarray of class indices
         """
@@ -149,7 +156,7 @@ class PotsdamDataset(Dataset):
             mask[np.all(rgb_img == np.array(color), axis=-1)] = cls_idx
         return mask
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Get a patch of image and label at the specified index.
 
@@ -183,72 +190,192 @@ class PotsdamDataset(Dataset):
 
         return image_patch, label_patch
 
+    @staticmethod
+    def _get_normalize_transform() -> A.Normalize:
+        """ Normalize to ImageNet statistics. """
+        return A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
 
-def get_data_loaders(image_dir: str,
-                     label_dir: str,
-                     patch_size: int,
-                     stride: int,
-                     dist: List[float],
-                     batch_size: int,
-                     device: str,
-                     mode: str = "combined",
-                     pin_memory: bool = False,
-                     num_workers: int = 0,
-                     seed: int = 42) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    """
-    Get train, validation, and test data loaders for the Potsdam dataset.
+    @classmethod
+    def _get_train_transform(cls) -> A.Compose:
+        return A.Compose([
+            A.RandomRotate90(p=0.3),
+            A.HorizontalFlip(p=0.3),
+            A.VerticalFlip(p=0.5),
+            A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.15, rotate_limit=45, p=0.3),
+            A.RandomBrightnessContrast(p=0.3),
+            A.HueSaturationValue(p=0.3),
+            A.GaussianBlur(p=0.3),
+            A.GaussNoise(std_range=(0.05, 0.15), p=0.3),
+            cls._get_normalize_transform(),
+            ToTensorV2(),
+        ])
 
-    :param image_dir: path to images
-    :param label_dir: path to labels
-    :param patch_size: patch size
-    :param stride: stride for patch extraction
-    :param dist: distribution of samples across train, validation, and test sets (e.g. [0.8, 0.1, 0.1])
-    :param batch_size: batch size
-    :param device: device string (e.g. 'cuda')
-    :param mode: 'single' for all classes separate, 'combined' for grouped classes
-    :param pin_memory: dataloader pinned memory
-    :param num_workers: dataloader workers
-    :param seed: random seed
-    :return: train_loader, val_loader, test_loader
-    """
+    @classmethod
+    def _get_val_transform(cls):
+        return A.Compose([
+            cls._get_normalize_transform(),
+            ToTensorV2(),
+        ])
 
-    # Build index with one temporary dataset
-    full_dataset = PotsdamDataset(image_dir, label_dir, patch_size, stride, device, mode=mode)
-    num_samples = len(full_dataset)
+    @classmethod
+    def get_data_loaders(
+            cls,
+            image_dir: str,
+            label_dir: str,
+            patch_size: int,
+            stride: int,
+            dist: tuple[float, float, float],
+            batch_size: int,
+            device: str,
+            mode: str = "combined",
+            pin_memory: bool = False,
+            num_workers: int = 0,
+            seed: int = 42
+    ) -> tuple[DataLoader, DataLoader, DataLoader]:
+        """
+        Get train, validation, and test data loaders for the dataset.
 
-    # Compute split sizes
-    train_size = int(dist[0] * num_samples)
-    val_size = int(dist[1] * num_samples)
-    test_size = num_samples - train_size - val_size
+        :param image_dir: path to images
+        :param label_dir: path to labels
+        :param patch_size: patch size
+        :param stride: stride for patch extraction
+        :param dist: distribution of samples across train, validation, and test sets (e.g. [0.8, 0.1, 0.1])
+        :param batch_size: batch size
+        :param device: device string (e.g. 'cuda')
+        :param mode: 'single' for all classes separate, 'combined' for grouped classes
+        :param pin_memory: dataloader pinned memory
+        :param num_workers: dataloader workers
+        :param seed: random seed
+        :return: train_loader, val_loader, test_loader
+        """
 
-    # Generate shuffled indices
-    indices = np.arange(num_samples)
-    np.random.seed(seed)
-    np.random.shuffle(indices)
+        # Build index with one temporary dataset
+        full_dataset = cls(image_dir, label_dir, patch_size, stride, device, mode=mode)
+        num_samples = len(full_dataset)
 
-    train_idx = indices[:train_size]
-    val_idx = indices[train_size:train_size+val_size]
-    test_idx = indices[train_size+val_size:]
+        # Compute split sizes
+        train_size = int(dist[0] * num_samples)
+        val_size = int(dist[1] * num_samples)
 
-    # Create dataset instances for each split with correct transforms
-    train_dataset_full = PotsdamDataset(image_dir, label_dir, patch_size, stride, device, mode=mode)
-    train_dataset_full.set_is_training(True)
-    train_dataset = Subset(train_dataset_full, train_idx)
+        # Generate shuffled indices
+        indices = np.arange(num_samples)
+        np.random.seed(seed)
+        np.random.shuffle(indices)
 
-    val_dataset_full = PotsdamDataset(image_dir, label_dir, patch_size, stride, device, mode=mode)
-    val_dataset_full.set_is_training(False)
-    val_dataset = Subset(val_dataset_full, val_idx)
+        train_idx = indices[:train_size]
+        val_idx = indices[train_size:train_size + val_size]
+        test_idx = indices[train_size + val_size:]
 
-    test_dataset_full = PotsdamDataset(image_dir, label_dir, patch_size, stride, device, mode=mode)
-    test_dataset_full.set_is_training(False)
-    test_dataset = Subset(test_dataset_full, test_idx)
+        # Create dataset instances for each split with correct transforms
+        train_dataset_full = cls(image_dir, label_dir, patch_size, stride, device, mode=mode)
+        train_dataset_full.set_is_training(True)
+        train_dataset = Subset(train_dataset_full, train_idx)
 
-    # Build loaders
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
-                              num_workers=num_workers, pin_memory=pin_memory)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,
-                            num_workers=num_workers, pin_memory=pin_memory)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
-                             num_workers=num_workers, pin_memory=pin_memory)
+        val_dataset_full = cls(image_dir, label_dir, patch_size, stride, device, mode=mode)
+        val_dataset_full.set_is_training(False)
+        val_dataset = Subset(val_dataset_full, val_idx)
 
-    return train_loader, val_loader, test_loader
+        test_dataset_full = cls(image_dir, label_dir, patch_size, stride, device, mode=mode)
+        test_dataset_full.set_is_training(False)
+        test_dataset = Subset(test_dataset_full, test_idx)
+
+        # Build loaders
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
+                                  num_workers=num_workers, pin_memory=pin_memory)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,
+                                num_workers=num_workers, pin_memory=pin_memory)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
+                                 num_workers=num_workers, pin_memory=pin_memory)
+
+        return train_loader, val_loader, test_loader
+
+
+# Number of Patches = (img_dim - patch_size) // Stride + 1
+class PotsdamDataset(CustomDataset):
+    @staticmethod
+    def color_map_single() -> MappingProxyType[tuple[int, int, int], int]:
+        return MappingProxyType({
+            (255, 255, 255): 0,  # Impervious surfaces
+            (0, 0, 255): 1,  # Building
+            (255, 255, 0): 2,  # Car
+            (0, 255, 255): 3,  # Low vegetation
+            (0, 255, 0): 4,  # Tree
+            (255, 0, 0): 5,  # Clutter/background
+        })
+
+    @staticmethod
+    def color_map_combined() -> MappingProxyType[tuple[int, int, int], int]:
+        return MappingProxyType({
+            # Impervious surfaces: 0
+            (255, 255, 255): 0,  # Impervious surfaces
+            (0, 0, 255): 0,  # Building
+            (255, 255, 0): 0,  # Car
+            # Pervious surfaces: 1
+            (0, 255, 255): 1,  # Low vegetation
+            (0, 255, 0): 1,  # Tree
+            # Others: 2
+            (255, 0, 0): 2,  # Clutter/background
+        })
+
+    @staticmethod
+    def class_names_single() -> tuple[str, ...]:
+        return (
+            'Impervious surfaces',
+            'Building',
+            'Car',
+            'Low vegetation',
+            'Tree',
+            'Clutter/background'
+        )
+
+
+class HessigheimDataset(Dataset):
+    @staticmethod
+    def color_map_single() -> MappingProxyType[tuple[int, int, int], int]:
+        return MappingProxyType({
+            (178, 203, 47): 0,  # Low vegetation
+            (183, 178, 170): 1,  # Impervious surface
+            (32, 151, 163): 2,  # Vehicle
+            (168, 33, 107): 3,  # Urban furniture
+            (255, 122, 89): 4,  # Roof
+            (255, 215, 136): 5,  # Facade
+            (89, 125, 53): 6,  # Shrub
+            (0, 128, 65): 7,  # Tree
+            (170, 85, 0): 8,  # Soil/Gravel
+            (252, 225, 5): 9,  # Vertical surface
+            (128, 0, 0): 10,  # Chimney
+        })
+
+    @staticmethod
+    def color_map_combined() -> MappingProxyType[tuple[int, int, int], int]:
+        return MappingProxyType({  # Impervious surfaces: 0
+            (183, 178, 170): 0,  # Impervious surface
+            (32, 151, 163): 0,  # Vehicle
+            (168, 33, 107): 0,  # Urban furniture
+            (255, 122, 89): 0,  # Roof
+            (255, 215, 136): 0,  # Facade
+            (252, 225, 5): 0,  # Vertical surface
+            (128, 0, 0): 0,  # Chimney
+            # Pervious surfaces: 1
+            (178, 203, 47): 0,  # Low vegetation
+            (89, 125, 53): 1,  # Shrub
+            (0, 128, 65): 1,  # Tree
+            (170, 85, 0): 1,  # Soil/Gravel
+            # Others: 2
+        })
+
+    @staticmethod
+    def class_names_single() -> tuple[str, ...]:
+        return (
+            'Low vegetation',
+            'Impervious surface',
+            'Vehicle',
+            'Urban furniture',
+            'Roof',
+            'Facade',
+            'Shrub',
+            'Tree',
+            'Soil/Gravel',
+            'Vertical surface',
+            'Chimney'
+        )
