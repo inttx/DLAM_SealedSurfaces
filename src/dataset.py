@@ -329,7 +329,7 @@ class PotsdamDataset(CustomDataset):
         )
 
 
-class HessigheimDataset(Dataset):
+class HessigheimDataset(CustomDataset):
     @staticmethod
     def color_map_single() -> MappingProxyType[tuple[int, int, int], int]:
         return MappingProxyType({
