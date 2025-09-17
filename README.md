@@ -1,1 +1,1 @@
-# DLAM_SealedSurfaces
+# Sealed Surface Segmentation
