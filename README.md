@@ -18,7 +18,7 @@ Our main goal is to **train and evaluate segmentation models** that can distingu
 
 ---
 
-## 🗂 Dataset  
+## Dataset  
 - **Benchmark dataset**: [ISPRS Potsdam 2D](https://www.isprs.org/resources/datasets/benchmarks/UrbanSemLab/2d-sem-label-potsdam.aspx)
   - 37 RGB orthoimage tiles with pixel-level annotations  
   - Original 6 classes (some merged for training)  
