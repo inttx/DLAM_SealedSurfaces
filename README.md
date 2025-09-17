@@ -53,7 +53,7 @@ We implement and compare two strong segmentation models:
 
 ---
 
-## 👥 Contributors  
+## Contributors  
 - Jonas Keller
 - Leon Claviez
 - Julian Seeger
@@ -61,6 +61,6 @@ We implement and compare two strong segmentation models:
 
 ---
 
-## 📜 License  
+## License  
 This project is released under the **MIT License**.
 
